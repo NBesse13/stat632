@@ -1,0 +1,239 @@
+---
+title: "Taylor Swift Group Project Stat 632"
+author: "Stephen Gomez, Nick Besse, Ashley Cox"
+date: "2024-04-03"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+#Libraries
+library(ISLR)
+library(ggplot2)
+library(tidyverse)
+library(dplyr)
+library(ggExtra)
+library(GGally)
+library(olsrr)
+library(faraway)
+library(kableExtra)
+library(car)
+library(jtools)
+library(pROC)
+tswift = read.csv("taylor_swift_spotify.csv")
+
+tswift$Pop <- ifelse(tswift$popularity>50, 1, 0)
+```
+
+Full Additive Model
+
+```{r}
+#Full Additive Model Non-Train
+tswift_MLM <- lm(popularity ~ acousticness + danceability + energy + instrumentalness + liveness + loudness + speechiness + tempo + valence + duration_ms, data=tswift)
+
+tswift_null <- lm(popularity ~ 1, data=tswift)
+
+anova(tswift_null, tswift_MLM)
+
+summary(tswift_MLM)
+```
+
+## Training Model
+
+```{r}
+set.seed(42) # set seed for reproducibility
+n <- nrow(tswift); n
+train_i <- floor(0.7*n)
+#selecting subset and training model
+train <- sample(1:n, train_i)
+#selecting test data
+tswift_test <- tswift[-train, ]
+
+tswift_MLM_Train <- lm(popularity ~ acousticness + danceability + energy + instrumentalness + liveness + loudness + speechiness + tempo + valence + duration_ms, data=tswift, subset=train)
+
+tswift_null_train <- lm(popularity ~ 1, data=tswift, subset=train)
+
+anova(tswift_null_train, tswift_MLM_Train)
+
+```
+
+## Global F-Test for Predicting Variables
+
+$H_0: \beta_1=\beta_2=\beta_3=...=\beta_{10}=0$
+
+$H_A:$ At least one $\beta_j$ is different.
+
+The F-Statistic$=3.7894$ and the p-value is 7.112e-05 which is $<0.001$.
+
+Since the p-value is significantly less than 0.001, we reject the null hypothesis that $\beta_1=...=\beta_{10}=0$. Thus, we conclude, that at least one predictor is associated with popularity for Taylor Swifts songs.
+
+```{r}
+summary(tswift_MLM_Train)
+```
+
+## Individual T-Tests:
+
+$H_0:\beta_j=0$ $H_A:\beta_j\neq0$
+
+The regression summary of the full model shows that acousticness, danceability, instrumentalness, speechiness, tempo. Are not significant predictors for the model. Therefore these five variables can be dropped from the model, since their respective p-values are greater than 0.05.
+
+## Partial F-Test
+
+$H_0: \beta_1=\beta_2=\beta_4=\beta_7=\beta_8=0$
+
+$H_0:$ At least one or more$\beta_j\neq0$
+
+```{r}
+tswift_reduced <- lm(popularity ~ energy + liveness + loudness + valence + duration_ms, data=tswift)
+
+anova(tswift_reduced, tswift_MLM)
+
+```
+
+  The p-value = 0.9161 is large, so we do not reject the null hypothesis that $H_0:\beta_1=\beta_2=\beta_4=\beta_7=\beta_8=0$. So we can remove the predictors, acousticness, danceability, instrumentalness, speechiness, tempo, and duration in ms, from the model.
+
+\pagebreak
+
+## Stepwise Regression
+
+```{r}
+tswift_reduced_step <- step(tswift_MLM_Train)
+
+summary(tswift_reduced_step)
+
+tswift_MLM_best <- lm(popularity ~ energy + liveness + loudness + valence + duration_ms, data=tswift, subset=train)
+
+#create vector of VIF values
+
+vif_values <- vif(tswift_reduced_step)
+
+#create horizontal bar chart to display each VIF value
+barplot(vif_values, main = "VIF Values", horiz = FALSE, col = "mediumslateblue")
+
+#Outlier/Leverage Plot
+ols_plot_cooksd_bar(tswift_reduced_step)
+```
+
+\pagebreak
+
+  Utilizing the step function, we can see that there is an agreement between the our previous hypotheses. The complete additive model included our 10 original predictors, with an AIC=4366.214. Comparison to our Step Model shows that there are only 5 predictors deemed appropriate for the prediction model, being Energy, liveness, loudness, valence, and duration in milliseconds. With an AIC of 4357.715. Showing the the reduced model is the preferred model.
+
+## Diagnostics
+
+Checking linearity
+
+```{r}
+#Scatter Plot Matrix
+pairs(popularity ~ energy + liveness + loudness + valence + duration_ms, data=tswift)
+
+reduced_mod2 <- lm(popularity ~ energy + liveness + loudness + valence + duration_ms, data=tswift)
+```
+
+```{r}
+par(mfrow=c(1,2), mar=c(4.5, 4.5, 2, 2))
+plot(predict(tswift_MLM_best), rstandard(tswift_MLM_best),
+xlab="Fitted Values", ylab="Standardized Residuals")
+abline(h=0)
+qqnorm(rstandard(tswift_MLM_best))
+qqline(rstandard(tswift_MLM_best))
+
+#Reduced Model
+par(mfrow=c(1,3), mar=c(4.5, 4.5, 2, 2))
+plot(tswift$energy, rstandard(reduced_mod2),
+xlab="Energy", ylab="Standardized Residuals")
+plot(tswift$liveness, rstandard(reduced_mod2),
+xlab="Liveness", ylab="Standardized Residuals")
+plot(tswift$loudness, rstandard(reduced_mod2),
+xlab="Loudness", ylab="Standardized Residuals")
+plot(tswift$valence, rstandard(reduced_mod2),
+xlab="Valence", ylab="Standardized Residuals")
+plot(tswift$duration_ms, rstandard(reduced_mod2),
+xlab="Duration (ms)", ylab="Standardized Residuals")
+```
+
+\pagebreak
+
+## Multiple Logistic Regression
+
+```{r}
+tswift_log_Model <- glm(Pop ~ acousticness + danceability + energy + instrumentalness + liveness + loudness + speechiness + tempo + valence + duration_ms, subset=train, data=tswift , family = binomial)
+
+summary(tswift_log_Model)
+
+glm_step <- step(tswift_log_Model)
+
+summary(glm_step)
+
+tswift_log_model <- glm(Pop ~ energy + liveness + loudness + speechiness + valence + duration_ms, subset=train, data=tswift , family = binomial)
+```
+
+## Predictions
+
+```{r}
+probs_test <- predict(tswift_MLM_best, newdata = tswift_test,
+                        type = "response")
+```
+
+
+#### Logistic Model
+```{r}
+
+probs_logistic_test <- predict(glm_step, newdata=tswift_test, type="response")
+
+preds_test <- rep(0, n-train_i)
+preds_test[probs_logistic_test > 0.5] <- 1
+#Confusion Matrix
+tb <- table(prediction = preds_test,
+            actual = tswift_test$Pop)
+addmargins(tb)
+
+#Accuracy (percent correctly classified)
+accuracy <- (tb[1,1] + tb[2,2]) / (n-train_i)
+
+#Sensitivity (percent of Trump wins (1) correctly classified)
+sensitivity <-  tb[2,2] / 122
+ 
+#Specificity (percent of Trump losses (0) correctly classified)
+specificity <- tb[1,1] / 37
+
+roc_obj <- roc(tswift_test$Pop, probs_logistic_test)
+plot(1 - roc_obj$specificities, roc_obj$sensitivities, type="l",
+       xlab = "1 - Specificity", ylab = "Sensitivity",
+     main="Receiver Operating Characteristic (ROC) Plot")
+# plot red point corresponding to 0.5 threshold:
+abline(0, 1, lty=2) # 1-1 line
+points(x =  1- specificity, y = sensitivity, col="red", pch=19)
+
+auc(roc_obj)
+```
+
+### Linear Regression
+
+```{r}
+probs_linear_test <- predict(tswift_MLM_best, newdata = tswift_test,
+                        type = "response")
+
+plot(tswift_test$popularity, probs_linear_test,
+     xlab="True Popularity", ylab="Predicted Popularity",
+     main="Test Set Popularity", xlim=c(0,100), ylim=c(0,100))
+abline(0,1)
+
+probs_linear_full <- predict(tswift_MLM_best, newdata=tswift, type="response")
+
+
+plot(tswift$popularity, probs_linear_full,
+     xlab="True Popularity", ylab="Predicted Popularity",
+     main="Full Set Popularity", xlim=c(0,100), ylim=c(0,100))
+abline(0,1)
+
+predictions <- tswift_MLM_best %>% predict(tswift_test)
+data.frame( R2 = R2(predictions, tswift_test$popularity),
+            RMSE = RMSE(predictions, tswift_test$popularity),
+            MAE = MAE(predictions, tswift_test$popularity))
+
+# plot(tswift$release_date, tswift$popularity)
+ggplot(tswift, aes(x=release_date, y=popularity)) +
+  geom_point() +
+  theme(axis.text.x=element_text(angle=60, hjust=1))+
+  xlab("Release Date") + ylab("Popularity")
+```
