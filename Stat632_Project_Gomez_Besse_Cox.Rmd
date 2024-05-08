@@ -87,6 +87,30 @@ $H_0:$ At least one or more$\beta_j\neq0$
 tswift_reduced <- lm(popularity ~ energy + liveness + loudness + valence + duration_ms, data=tswift)
 
 anova(tswift_reduced, tswift_MLM)
+tswift %>% 
+  ggplot(aes(popularity)) +
+  geom_histogram(fill="lightblue", color="white") +
+  labs(
+    x="Popularity Score",
+    y="Count",
+    title="Popularity Histogram"
+  )
+
+tswift %>% 
+  tbl_summary( 
+              include = c(-name, -album, -X, -release_date, -track_number, -id, -uri, -Pop, -duration_ms),
+              type= c(everything() ~"continuous"),
+              statistic = list(all_continuous() ~ "{mean} ({sd})"),
+              value = list(acousticness = "Acousticness", danceability = "Danceability",
+                           energy = "Energy",
+                           instrumentalness = "Instrumentalness", speechiness = "Speechiness",
+                           tempo = "Tempo", valence = "Valence",
+                           popularity = "Popularity"),
+              label = list(acousticness = "Acousticness", danceability = "Danceability",
+                           energy = "Energy",
+                           instrumentalness = "Instrumentalness", speechiness = "Speechiness",
+                           tempo = "Tempo", valence = "Valence",
+                           popularity = "Popularity"))
 
 ```
 
